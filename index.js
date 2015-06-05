@@ -21,57 +21,41 @@ var youtube = require('./plugins/youtube');
 var transcode = require('./plugins/transcode');
 var subtitles = require('./plugins/subtitles');
 
-if (opts.help) {
-  return console.log([
-    '',
-    'Usage: castnow [<media>, <media>, ...] [OPTIONS]',
-    '',
-    'Option                  Meaning',
-    '--tomp4                 Convert file to mp4 while playback',
-    '--device <name>         The name of the chromecast device that should be used',
-    '--address <ip>          The IP address of your chromecast device',
-    '--subtitles <path/url>  Path or URL to an SRT or VTT file',
-    '--myip <ip>             Your main IP address',
-    '--quiet               No output',
-    '--peerflix-* <value>    Pass options to peerflix',
-    '--ffmpeg-* <value>      Pass options to ffmpeg',
-    '--type <val>            Explicity set the mime-type (e.g. "video/mp4")',
-    '--bypass-srt-encoding   Disable automatic UTF8 encoding of SRT subtitles',
-    '--seek <value>          Seek to the specified time on start using the format hh:mm:ss or mm:ss',
+// if (opts.help) {
+//   return console.log([
+//     '',
+//     'Usage: castnow [<media>, <media>, ...] [OPTIONS]',
+//     '',
+//     'Option                  Meaning',
+//     '--tomp4                 Convert file to mp4 while playback',
+//     '--device <name>         The name of the chromecast device that should be used',
+//     '--address <ip>          The IP address of your chromecast device',
+//     '--subtitles <path/url>  Path or URL to an SRT or VTT file',
+//     '--myip <ip>             Your main IP address',
+//     '--quiet               No output',
+//     '--peerflix-* <value>    Pass options to peerflix',
+//     '--ffmpeg-* <value>      Pass options to ffmpeg',
+//     '--type <val>            Explicity set the mime-type (e.g. "video/mp4")',
+//     '--bypass-srt-encoding   Disable automatic UTF8 encoding of SRT subtitles',
+//     '--seek <value>          Seek to the specified time on start using the format hh:mm:ss or mm:ss',
 
-    '--help                  This help screen',
-    '',
-    'Player controls',
-    '',
-    'Key                     Meaning',
-    'space                   Toggle between play and pause',
-    'm                       Toggle between mute and unmute',
-    'up                      Volume Up',
-    'down                    Volume Down',
-    'left                    Seek backward',
-    'right                   Seek forward',
-    'n                       Next in playlist',
-    's                       Stop playback',
-    'quit                    Quit',
-    ''
-  ].join('\n'));
-}
-
-if (opts._.length) {
-  opts.playlist = opts._.map(function(item) {
-    return {
-      path: item
-    };
-  });
-}
-
-delete opts._;
-
-if (opts.quiet || process.env.DEBUG) {
-  ui.hide();
-}
-
-ui.showLabels('state');
+//     '--help                  This help screen',
+//     '',
+//     'Player controls',
+//     '',
+//     'Key                     Meaning',
+//     'space                   Toggle between play and pause',
+//     'm                       Toggle between mute and unmute',
+//     'up                      Volume Up',
+//     'down                    Volume Down',
+//     'left                    Seek backward',
+//     'right                   Seek forward',
+//     'n                       Next in playlist',
+//     's                       Stop playback',
+//     'quit                    Quit',
+//     ''
+//   ].join('\n'));
+// }
 
 var last = function(fn, l) {
   return function() {
@@ -83,24 +67,17 @@ var last = function(fn, l) {
 };
 
 var ctrl = function(err, p, ctx) {
+
   if (err) {
-    ui.hide();
     debug('player error: %o', err);
     console.log(chalk.red(err));
-    process.exit();
   }
 
   var playlist = ctx.options.playlist;
   var volume;
 
-  keypress(process.stdin);
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-
   ctx.once('closed', function() {
-    ui.hide();
     console.log(chalk.red('lost connection'));
-    process.exit();
   });
 
   // get initial volume
@@ -108,15 +85,8 @@ var ctrl = function(err, p, ctx) {
     volume = status;
   });
 
-  if (!ctx.options.disableTimeline) {
-    p.on('position', function(pos) {
-      ui.setProgress(pos.percent);
-      ui.render();
-    });
-  }
-
   var seek = debouncedSeeker(function(offset) {
-    if (ctx.options.disableSeek || offset === 0) return;
+    if (offset === 0) return;
     var seconds = Math.max(0, (p.getPosition() / 1000) + offset);
     debug('seeking to %s', seconds);
     p.seek(seconds);
@@ -135,9 +105,7 @@ var ctrl = function(err, p, ctx) {
       } else {
         title = metadata.title;
       }
-      ui.setLabel('source', 'Source', title);
-      ui.showLabels('state', 'source');
-      ui.render();
+      console.log(chalk.blue('Title: ' + title));
     });
   };
 
@@ -159,7 +127,7 @@ var ctrl = function(err, p, ctx) {
     if (ctx.mode !== 'launch') return;
     if (!playlist.length) return process.exit();
     p.stop(function() {
-      ui.showLabels('state');
+      // ui.showLabels('state');
       debug('loading next in playlist: %o', playlist[0]);
       p.load(playlist[0], noop);
       playlist.shift();
@@ -174,10 +142,9 @@ var ctrl = function(err, p, ctx) {
     return status;
   }));
 
-  var keyMappings = {
-
+  return {
     // toggle between play / pause
-    space: function() {
+    playPause: function() {
       if (p.currentSession.playerState === 'PLAYING') {
         p.pause();
       } else if (p.currentSession.playerState === 'PAUSED') {
@@ -185,8 +152,22 @@ var ctrl = function(err, p, ctx) {
       }
     },
 
+    // play
+    play: function() {
+      if (p.currentSession.playerState === 'PAUSED') {
+        p.play();
+      }
+    },
+
+    // pause
+    pause: function() {
+      if (p.currentSession.playerState === 'PLAYING') {
+        p.pause();
+      }
+    },
+
     // toggle between mute / unmute
-    m: function() {
+    toggleMute: function() {
       if(!volume) { 
         return; 
       } else if (volume.muted) {
@@ -203,7 +184,7 @@ var ctrl = function(err, p, ctx) {
     },
 
     // volume up
-    up: function() {
+    volumeUp: function() {
       if (!volume || volume.level >= 1) return;
       p.setVolume(Math.min(volume.level + 0.05, 1), function(err, status) {
         if (err) return;
@@ -212,7 +193,7 @@ var ctrl = function(err, p, ctx) {
     },
 
     // volume down
-    down: function() {
+    volumeDown: function() {
       if (!volume || volume.level <= 0) return;
       p.setVolume(Math.max(volume.level - 0.05, 0), function(err, status) {
         if (err) return;
@@ -221,63 +202,31 @@ var ctrl = function(err, p, ctx) {
     },
 
     // next item in playlist
-    n: function() {
+    next: function() {
       nextInPlaylist();
     },
 
     // stop playback
-    s: function() {
+    stop: function() {
       p.stop();
     },
 
     // quit
-    q: function() {
-      process.exit();
+    quit: function() {
+      // Try do something like quit
     },
 
     // Rewind, one "seekCount" per press
-    left: function() {
+    seekLeft: function() {
       seek(-30);
     },
 
     // Forward, one "seekCount" per press
-    right: function() {
+    seekRight: function() {
       seek(30);
     }
   };
-
-  process.stdin.on('keypress', function(ch, key) {
-    if (key && key.name && keyMappings[key.name]) {
-      debug('key pressed: %s', key.name);
-      keyMappings[key.name]();
-    }
-    if (key && key.ctrl && key.name == 'c') {
-      process.exit();
-    }
-  });
 };
-
-var capitalize = function(str) {
-  return str.substr(0, 1).toUpperCase() + str.substr(1);
-};
-
-var logState = (function() {
-  var inter;
-  var dots = circulate(['.', '..', '...', '....']);
-  return function(status) {
-    if (inter) clearInterval(inter);
-    debug('player status: %s', status);
-    inter = setInterval(function() {
-      ui.setLabel('state', 'State', capitalize(status) + dots());
-      ui.render();
-    }, 300);
-  };
-})();
-
-player.use(function(ctx, next) {
-  ctx.on('status', logState);
-  next();
-});
 
 player.use(directories);
 player.use(torrent);
@@ -287,6 +236,7 @@ player.use(youtube);
 player.use(transcode);
 player.use(subtitles);
 
+// Play first item
 player.use(function(ctx, next) {
   if (ctx.mode !== 'launch') return next();
   ctx.options = xtend(ctx.options, ctx.options.playlist[0]);
@@ -294,20 +244,21 @@ player.use(function(ctx, next) {
   next();
 });
 
-if (!opts.playlist) {
-  debug('attaching...');
-  player.attach(opts, ctrl);
-} else {
-  debug('launching...');
-  player.launch(opts, ctrl);
-}
+module.exports = {
+  setup: function(opts) {
+    return {
+      then: function(callback) {
+        cb = function(err, p, ctx) {
+          controller = ctrl(err, p, ctx);
+          callback(controller);
+        };
 
-process.on('SIGINT', function() {
-  process.exit();
-});
-
-process.on('exit', function() {
-  ui.hide();
-});
-
-module.exports = player;
+        if (!opts.playlist) {
+          player.attach(opts, cb);
+        } else {
+          player.launch(opts, cb);
+        }
+      }
+    };
+  }
+};
