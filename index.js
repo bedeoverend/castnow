@@ -253,7 +253,7 @@ module.exports = {
           callback(controller);
         };
 
-        if (!opts.playlist) {
+        if (!opts.playlist || opts.playlist.length === 0) {
           player.attach(opts, cb);
         } else {
           player.launch(opts, cb);
